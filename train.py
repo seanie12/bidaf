@@ -40,6 +40,7 @@ def main(args):
             start_positions = start_positions.to(device)
             end_positions = end_positions.to(device)
 
+            optimizer.zero_grad()
             loss = model(c_ids, q_ids, start_positions, end_positions)
             loss.backward()
             avg_loss = cal_running_avg_loss(loss.item(), avg_loss)
@@ -66,7 +67,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", default=0.5, type=float, help="learning rate")
     parser.add_argument("--dropout", default=0.2, type=float, help="dropout")
     parser.add_argument("--decay", default=0.999, type=float, help="exp moving average decay")
-    parser.add_argument("--num_epochs", default=12, type=int, help="num epochs")
+    parser.add_argument("--num_epochs", default=20, type=int, help="num epochs")
     parser.add_argument("--batch_size", default=32, type=int, help="batch_size")
     parser.add_argument("--max_seq_len", default=400, type=int, help="max context length")
     parser.add_argument("--max_query_len", default=64, type=int, help="max query length")
