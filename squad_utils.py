@@ -641,8 +641,8 @@ def _check_is_max_context(doc_spans, cur_span_index, position):
 
 def write_predictions(all_examples, all_features, all_results, n_best_size,
                       max_answer_length, do_lower_case, output_prediction_file,
-                      output_nbest_file, output_null_log_odds_file, verbose_logging,
-                      version_2_with_negative, null_score_diff_threshold, noq_position=False):
+                      verbose_logging, version_2_with_negative, null_score_diff_threshold,
+                      noq_position=False):
     """Write final predictions to the json file and log-odds of null if needed."""
     # logger.info("Writing predictions to: %s" % (output_prediction_file))
     # logger.info("Writing nbest to: %s" % (output_nbest_file))
@@ -839,13 +839,6 @@ def write_predictions(all_examples, all_features, all_results, n_best_size,
             all_nbest_json[example.qas_id] = nbest_json
     with open(output_prediction_file, "w") as writer:
         writer.write(json.dumps(all_predictions, indent=4) + "\n")
-
-    with open(output_nbest_file, "w") as writer:
-        writer.write(json.dumps(all_nbest_json, indent=4) + "\n")
-
-    if version_2_with_negative:
-        with open(output_null_log_odds_file, "w") as writer:
-            writer.write(json.dumps(scores_diff_json, indent=4) + "\n")
 
 
 def get_final_text(pred_text, orig_text, do_lower_case, verbose_logging=False):
@@ -1241,5 +1234,3 @@ def evaluate(dataset, predictions):
     f1 = 100.0 * f1 / total
 
     return {'exact_match': exact_match, 'f1': f1}
-
-

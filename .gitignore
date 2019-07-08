@@ -109,7 +109,7 @@ venv.bak/
 .idea/
 deprecated/
 sample.json
-data/train
+data/
 pickled_data/
 save/
 *.gz
