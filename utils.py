@@ -3,6 +3,7 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 import time
 
+
 class EMA(object):
     """Exponential moving average of model parameters.
     Args:

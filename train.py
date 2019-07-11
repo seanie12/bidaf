@@ -7,14 +7,22 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as sched
 import torch.nn as nn
 import time
+from eval import eval_qa
+import os
 
 
 def main(args):
+    save_dir = os.path.join("./save", time.strftime("%m%d%H%M%S"))
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     data_loader, _, _ = get_data_loader(tokenizer, "./data/train-v1.1.json",
                                         shuffle=True, args=args)
-
-    model = BiDAF(768, args.hidden_size, args.dropout)
+    vocab_size = len(tokenizer.vocab)
+    model = BiDAF(embedding_size=100,
+                  vocab_size=vocab_size,
+                  hidden_size=args.hidden_size,
+                  drop_prob=args.dropout)
     device = torch.device("cuda")
     model = model.to(device)
     model.train()
@@ -25,9 +33,11 @@ def main(args):
     step = 0
     num_batches = len(data_loader)
     avg_loss = 0
+    best_f1 = 0
     for epoch in range(1, args.num_epochs + 1):
         step += 1
         start = time.time()
+        model.train()
         for i, batch in enumerate(data_loader, start=1):
             c_ids, q_ids, start_positions, end_positions = batch
             c_len = torch.sum(torch.sign(c_ids), 1)
@@ -41,7 +51,9 @@ def main(args):
             end_positions = end_positions.to(device)
 
             optimizer.zero_grad()
-            loss = model(c_ids, q_ids, start_positions, end_positions)
+            loss = model(c_ids, q_ids,
+                         start_positions=start_positions,
+                         end_positions=end_positions)
             loss.backward()
             avg_loss = cal_running_avg_loss(loss.item(), avg_loss)
             nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
@@ -57,9 +69,15 @@ def main(args):
                         avg_loss)
             print(msg, end="\r")
         print("epoch: {}, final loss: {:.4f}".format(epoch, avg_loss))
-    state_dict = model.state_dict()
-    save_file = "./save/bidaf_{}".format(avg_loss)
-    torch.save(state_dict, save_file)
+        metric_dict = eval_qa(args, model)
+        f1 = metric_dict["f1"]
+        em = metric_dict["exact_match"]
+        if f1 > best_f1:
+            best_f1 = f1
+            state_dict = model.state_dict()
+            save_file = "bidaf_{}_{}".format(f1, em)
+            path = os.path.join(save_dir, save_file)
+            torch.save(state_dict, path)
 
 
 if __name__ == "__main__":
@@ -68,8 +86,8 @@ if __name__ == "__main__":
     parser.add_argument("--lr", default=0.5, type=float, help="learning rate")
     parser.add_argument("--dropout", default=0.2, type=float, help="dropout")
     parser.add_argument("--decay", default=0.999, type=float, help="exp moving average decay")
-    parser.add_argument("--num_epochs", default=12, type=int, help="num epochs")
-    parser.add_argument("--batch_size", default=32, type=int, help="batch_size")
+    parser.add_argument("--num_epochs", default=20, type=int, help="num epochs")
+    parser.add_argument("--batch_size", default=60, type=int, help="batch_size")
     parser.add_argument("--max_seq_len", default=400, type=int, help="max context length")
     parser.add_argument("--max_query_len", default=64, type=int, help="max query length")
     parser.add_argument("--weight_decay", default=0, type=float, help="weight decay")

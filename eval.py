@@ -6,15 +6,17 @@ import torch
 import collections
 import json
 import argparse
+from tqdm import tqdm
 
 
-def main(args):
+def eval_qa(args, model=None):
     tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     eval_loader, eval_examples, eval_features = get_data_loader(tokenizer, "./data/dev-v1.1.json",
                                                                 shuffle=False, args=args)
-    model = BiDAF(768, args.hidden_size, drop_prob=0.0)
-    state_dict = torch.load(args.model_path)
-    model.load_state_dict(state_dict)
+    if model is None:
+        model = BiDAF(768, args.hidden_size, drop_prob=0.0)
+        state_dict = torch.load(args.model_path)
+        model.load_state_dict(state_dict)
     model.eval()
     device = torch.device("cuda")
     model.to(device)
@@ -59,7 +61,9 @@ def main(args):
         dataset = dataset_json["data"]
     with open("./result/bidaf_pred.json") as prediction_file:
         predictions = json.load(prediction_file)
-    print(json.dumps(evaluate(dataset, predictions)))
+    ret = evaluate(dataset, predictions)
+    print(json.dumps(ret))
+    return ret
 
 
 if __name__ == "__main__":
@@ -70,5 +74,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", default=32, type=int, help="batch_size")
     parser.add_argument("--max_seq_len", default=400, type=int, help="max context length")
     parser.add_argument("--max_query_len", default=64, type=int, help="max query length")
+    parser.add_argument("--model_path", type=str, help="model path")
+    parser.add_argument("--debug", action="store_true", help="debugging mode")
     args = parser.parse_args()
-    main(args)
+    eval_qa(args)

@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-from pytorch_pretrained_bert import BertModel
 
 
 class Embedding(nn.Module):
@@ -16,21 +15,37 @@ class Embedding(nn.Module):
         drop_prob (float): Probability of zero-ing out activations
     """
 
-    def __init__(self, embedding_size, hidden_size, freeze=True):
+    def __init__(self, embedding_size, vocab_size, hidden_size, dropout_p=0.2):
         super(Embedding, self).__init__()
-        self.embed = BertModel.from_pretrained("bert-base-uncased").embeddings
-        if freeze:
-            self.embed.requires_grad = False
+        self.embed = nn.Embedding(vocab_size, embedding_size)
         self.proj = nn.Linear(embedding_size, hidden_size, bias=False)
+        self.dropout = nn.Dropout(dropout_p)
         self.hwy = HighwayEncoder(2, hidden_size)
 
     def forward(self, x):
-        emb = self.embed(x)  # (batch_size, seq_len, embed_size)
+        if len(x.size()) == 2:
+            emb = self.embed(x)  # (batch_size, seq_len, embed_size)
+        else:
+            emb = self.get_embedding(x)  # (batch_size, seq_len, vocab_size)
+
         # no dropout because dropout is already applied in Bert embedding
+        emb = self.dropout(emb)
         emb = self.proj(emb)  # (batch_size, seq_len, hidden_size)
         emb = self.hwy(emb)  # (batch_size, seq_len, hidden_size)
 
         return emb
+
+    def get_embedding(self, vocab_dist):
+        """
+
+        :param vocab_dist: [b,t,|V|]
+        :return:
+        """
+        assert len(vocab_dist.size()) == 3
+        embedding_weight = self.embed.weight  # [|V|, d]
+        words_embeddings = torch.matmul(vocab_dist, embedding_weight)  # [b, d]
+
+        return words_embeddings
 
 
 class HighwayEncoder(nn.Module):
