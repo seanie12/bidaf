@@ -62,7 +62,7 @@ def eval_qa(args, model=None):
     with open("./result/bidaf_pred.json") as prediction_file:
         predictions = json.load(prediction_file)
     ret = evaluate(dataset, predictions)
-    print(json.dumps(ret))
+
     return ret
 
 
@@ -77,4 +77,5 @@ if __name__ == "__main__":
     parser.add_argument("--model_path", type=str, help="model path")
     parser.add_argument("--debug", action="store_true", help="debugging mode")
     args = parser.parse_args()
-    eval_qa(args)
+    ret = eval_qa(args)
+    print(ret)

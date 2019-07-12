@@ -68,10 +68,12 @@ def main(args):
                         eta(start, i, num_batches),
                         avg_loss)
             print(msg, end="\r")
-        print("epoch: {}, final loss: {:.4f}".format(epoch, avg_loss))
         metric_dict = eval_qa(args, model)
         f1 = metric_dict["f1"]
         em = metric_dict["exact_match"]
+        print("epoch: {}, final loss: {:.4f}, F1:{:.2f}, EM:{:.2f}"
+              .format(epoch, avg_loss, f1, em))
+
         if f1 > best_f1:
             best_f1 = f1
             state_dict = model.state_dict()
