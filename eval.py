@@ -14,7 +14,11 @@ def eval_qa(args, model=None):
     eval_loader, eval_examples, eval_features = get_data_loader(tokenizer, "./data/dev-v1.1.json",
                                                                 shuffle=False, args=args)
     if model is None:
-        model = BiDAF(768, args.hidden_size, drop_prob=0.0)
+         vocab_size = len(tokenizer.vocab)
+         model = BiDAF(embedding_size=100,
+                       vocab_size=vocab_size,
+                       hidden_size=args.hidden_size,
+                       drop_prob=0.0))
         state_dict = torch.load(args.model_path)
         model.load_state_dict(state_dict)
     model.eval()
