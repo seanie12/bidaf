@@ -8,6 +8,9 @@ import string
 import re
 import sys
 import numpy as np
+import gzip
+import json_lines
+from tqdm import tqdm
 
 
 class SquadExample(object):
@@ -244,7 +247,7 @@ def convert_examples_to_features_answer_id(examples, tokenizer, max_seq_length,
     unique_id = 1000000000
 
     features = []
-    for (example_index, example) in enumerate(examples):
+    for (example_index, example) in tqdm(enumerate(examples), total=len(examples)):
         query_tokens = tokenizer.tokenize(example.question_text)
 
         if len(query_tokens) > max_query_length:
@@ -375,7 +378,8 @@ def convert_examples_to_features_answer_id(examples, tokenizer, max_seq_length,
                 end_position = 0
                 noq_start_position = 0
                 noq_end_position = 0
-            q_tokens = deepcopy(query_tokens)
+
+            q_tokens = deepcopy(query_tokens)[:max_query_length - 2]
             q_tokens.insert(0, "[CLS]")
             q_tokens.append("[SEP]")
             q_ids = tokenizer.convert_tokens_to_ids(q_tokens)
@@ -388,19 +392,6 @@ def convert_examples_to_features_answer_id(examples, tokenizer, max_seq_length,
             while len(c_ids) < max_seq_length:
                 c_ids.append(0)
 
-            context_segment_ids = [0] * len(c_ids)
-            for answer_idx in range(noq_start_position, noq_end_position + 1):
-                context_segment_ids[answer_idx] = 1
-            # BIO tagging scheme
-            tag_ids = [0] * len(c_ids)  # Outside
-            if noq_start_position is not None and noq_end_position is not None:
-                tag_ids[noq_start_position] = 1  # Begin
-                # Inside tag
-                for idx in range(noq_start_position + 1, noq_end_position + 1):
-                    tag_ids[idx] = 2
-            if is_training:
-                assert 1 in tag_ids
-            assert len(tag_ids) == len(c_ids), "length of tag :{}, length of c :{}".format(len(tag_ids), len(c_ids))
             features.append(
                 InputFeatures(
                     unique_id=unique_id,
@@ -416,9 +407,9 @@ def convert_examples_to_features_answer_id(examples, tokenizer, max_seq_length,
                     q_ids=q_ids,
                     q_tokens=q_tokens,
                     answer_text=example.orig_answer_text,
-                    tag_ids=tag_ids,
+                    tag_ids=None,
                     segment_ids=segment_ids,
-                    context_segment_ids=context_segment_ids,
+                    context_segment_ids=None,
                     noq_start_position=noq_start_position,
                     noq_end_position=noq_end_position,
                     start_position=start_position,
@@ -475,6 +466,98 @@ class InputFeatures(object):
         self.start_position = start_position
         self.end_position = end_position
         self.is_impossible = is_impossible
+
+
+def read_examples(input_file, debug=False):
+    # Read data
+    unproc_data = []
+    with gzip.open(input_file, 'rt', encoding='utf-8') as f:  # opening file in binary(rb) mode
+        for item in json_lines.reader(f):
+            # print(item) #or use print(item['X']) for printing specific data
+            unproc_data.append(item)
+
+    def is_whitespace(c):
+        if c == " " or c == "\t" or c == "\r" or c == "\n" or ord(c) == 0x202F:
+            return True
+        return False
+
+    # Delete header
+    unproc_data = unproc_data[1:]
+    if debug:
+        unproc_data = unproc_data[:100]
+
+    ###################### Make Examples ######################
+    examples = []
+    skip_tags = ['<Table>', '<Tr>', '<Td>', '<Ol>', '<Ul>', '<Li>']
+    for item in unproc_data:
+        # in case of NQ dataset, context containing tags is excluded
+        context = item["context"]
+        skip_flag = False
+        for tag in skip_tags:
+            if tag in context:
+                skip_flag = True
+                break
+        if skip_flag:
+            continue
+        # 1. Get Context
+        paragraph_text = context.replace("[TLE]", "[SEP]")
+        paragraph_text = paragraph_text.replace("[PAR]", "[SEP]")
+        paragraph_text = paragraph_text.replace("[DOC]", "[SEP]")
+
+        doc_tokens = []
+        char_to_word_offset = []
+        prev_is_whitespace = True
+        for c in paragraph_text:
+            if is_whitespace(c):
+                prev_is_whitespace = True
+            else:
+                if prev_is_whitespace:
+                    doc_tokens.append(c)
+                else:
+                    doc_tokens[-1] += c
+                prev_is_whitespace = False
+            char_to_word_offset.append(len(doc_tokens) - 1)
+
+        # 2. qas
+        for qa in item['qas']:
+            qas_id = qa['qid']
+            question_text = qa['question']
+
+            # Only take the first answer
+            answer = qa['detected_answers'][0]
+            orig_answer_text = answer['text']
+
+            answer_offset = answer['char_spans'][0][0]
+            answer_length = len(orig_answer_text)
+            start_position = char_to_word_offset[answer_offset]
+            try:
+                end_position = char_to_word_offset[answer_offset + answer_length - 1]
+            except IndexError:
+                print("invalid answer span. Exclude this example")
+                end_position = -1
+                continue
+            # Only add answers where the text can be exactly recovered from the
+            # document. If this CAN'T happen it's likely due to weird Unicode
+            # stuff so we will just skip the example.
+            #
+            # Note that this means for training mode, every example is NOT
+            # guaranteed to be preserved.
+            actual_text = " ".join(doc_tokens[start_position:(end_position + 1)])
+            cleaned_answer_text = " ".join(
+                whitespace_tokenize(orig_answer_text))
+            if actual_text.find(cleaned_answer_text) == -1:
+                continue
+
+            example = SquadExample(
+                qas_id=qas_id,
+                question_text=question_text,
+                doc_tokens=doc_tokens,
+                orig_answer_text=orig_answer_text,
+                start_position=start_position,
+                end_position=end_position)
+            examples.append(example)
+
+    return examples
 
 
 def read_squad_examples(input_file, is_training, version_2_with_negative=False,

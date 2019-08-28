@@ -1,4 +1,5 @@
-from squad_utils import read_squad_examples, convert_examples_to_features_answer_id
+from squad_utils import read_squad_examples, convert_examples_to_features_answer_id, read_examples
+import os
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 import time
@@ -72,6 +73,40 @@ def get_data_loader(tokenizer, file, shuffle, args):
     data_loader = DataLoader(all_data, args.batch_size, shuffle=shuffle)
 
     return data_loader, examples, features
+
+
+def get_ext_data_loader(tokenizer, train_folder, shuffle, args):
+    train_files = [f for f in os.listdir(train_folder) if f.endswith(".gz")]
+    examples_lst = []
+    features_lst = []
+    file_list = args.files.split("_")
+    for file in train_files:
+        file_name = file.split(".")[0].lower()
+        if file_name not in file_list:
+            print("skip {}".format(file_name))
+            continue
+        print("preprocessing {}".format(file_name))
+        file_path = os.path.join(train_folder, file)
+        examples = read_examples(file_path, debug=args.debug)
+        examples_lst.extend(examples)
+
+        features = convert_examples_to_features_answer_id(examples,
+                                                          tokenizer=tokenizer,
+                                                          max_seq_length=args.max_seq_len,
+                                                          max_query_length=args.max_query_len,
+                                                          doc_stride=args.doc_stride,
+                                                          is_training=True)
+        features_lst.extend(features)
+    all_c_ids = torch.tensor([f.c_ids for f in features_lst], dtype=torch.long)
+    all_q_ids = torch.tensor([f.q_ids for f in features_lst], dtype=torch.long)
+
+    all_noq_start_positions = torch.tensor([f.noq_start_position for f in features_lst], dtype=torch.long)
+    all_noq_end_positions = torch.tensor([f.noq_end_position for f in features_lst], dtype=torch.long)
+
+    train_data = TensorDataset(all_c_ids, all_q_ids, all_noq_start_positions, all_noq_end_positions)
+
+    data_loader = DataLoader(train_data, shuffle=shuffle, batch_size=args.batch_size)
+    return data_loader
 
 
 def time_since(t):

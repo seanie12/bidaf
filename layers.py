@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-
+from pytorch_pretrained_bert import BertModel
 
 class Embedding(nn.Module):
     """Embedding layer used by BiDAF, without the character-level component.
@@ -17,6 +17,9 @@ class Embedding(nn.Module):
 
     def __init__(self, embedding_size, vocab_size, hidden_size, dropout_p=0.2):
         super(Embedding, self).__init__()
+        if embedding_size == 768:
+            self.embed = BertModel.from_pretrained("bert-base-uncased").embeddings
+            self.embed.requires_grad = False
         self.embed = nn.Embedding(vocab_size, embedding_size)
         self.proj = nn.Linear(embedding_size, hidden_size, bias=False)
         self.dropout = nn.Dropout(dropout_p)

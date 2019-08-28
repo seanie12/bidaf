@@ -1,12 +1,13 @@
-from pytorch_pretrained_bert import BertTokenizer
-from models import BiDAF
-from utils import get_data_loader
-from squad_utils import write_predictions, evaluate
-import torch
+import argparse
 import collections
 import json
-import argparse
-from tqdm import tqdm
+
+import torch
+from pytorch_pretrained_bert import BertTokenizer
+
+from models import BiDAF
+from squad_utils import write_predictions, evaluate
+from utils import get_data_loader
 
 
 def eval_qa(args, model=None):
@@ -14,7 +15,8 @@ def eval_qa(args, model=None):
     eval_loader, eval_examples, eval_features = get_data_loader(tokenizer, "./data/dev-v1.1.json",
                                                                 shuffle=False, args=args)
     if model is None:
-        model = BiDAF(768, args.hidden_size, drop_prob=0.0)
+        vocab_size = len(tokenizer.vocab)
+        model = BiDAF(100, vocab_size, args.hidden_size, drop_prob=0.0)
         state_dict = torch.load(args.model_path)
         model.load_state_dict(state_dict)
     model.eval()
@@ -72,9 +74,9 @@ if __name__ == "__main__":
     parser.add_argument("--dropout", default=0.0, type=float, help="dropout")
     parser.add_argument("--decay", default=0.999, type=float, help="exp moving average decay")
     parser.add_argument("--batch_size", default=32, type=int, help="batch_size")
-    parser.add_argument("--max_seq_len", default=400, type=int, help="max context length")
+    parser.add_argument("--max_seq_len", default=384, type=int, help="max context length")
     parser.add_argument("--max_query_len", default=64, type=int, help="max query length")
-    parser.add_argument("--model_path", type=str, help="model path")
+    parser.add_argument("--model_path", type=str, default="./save/bidaf_71", help="model path")
     parser.add_argument("--debug", action="store_true", help="debugging mode")
     args = parser.parse_args()
     ret = eval_qa(args)
