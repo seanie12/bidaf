@@ -16,7 +16,10 @@ def eval_qa(args, model=None):
                                                                 shuffle=False, args=args)
     if model is None:
         vocab_size = len(tokenizer.vocab)
-        model = BiDAF(100, vocab_size, args.hidden_size, drop_prob=0.0)
+        model = BiDAF(embedding_size=100,
+                      vocab_size=vocab_size,
+                      hidden_size=args.hidden_size,
+                      drop_prob=0.0)
         state_dict = torch.load(args.model_path)
         model.load_state_dict(state_dict)
     model.eval()
